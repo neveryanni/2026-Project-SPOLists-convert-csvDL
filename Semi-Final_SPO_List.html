@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPO List Viewer</title>
+    <style>
+        /* --- TEAMS CHAT VIEWER THEME --- */
+        :root {
+            --bg-body: #f0f0f0;
+            --bg-header: #ffffff;
+            --bg-container: #ffffff;
+            --bg-dropzone: #fafafa;
+            --bg-dropzone-drag: #f0f8ff;
+            --bg-summary: #fafafa;
+            
+            --text-main: #252424;
+            --text-sub: #555;
+            --text-header: #2d4d2a;
+            
+            --border-color: #e1e1e1;
+            --border-drag: #4a90e2;
+            
+            --toggle-bg-off: #ccc;
+            --toggle-bg-on: #2d4d2a;
+            
+            /* SharePoint Specifics */
+            --sp-pill-bg: #e6f2fb;
+            --sp-pill-text: #0078d4;
+            --sp-chip-bg: #f3f2f1;
+            --sp-chip-text: #201f1e;
+            --sp-check-color: #333;
+        }
+
+        body.dark-mode {
+            --bg-body: #1e1e1e;
+            --bg-header: #2a2a2a;
+            --bg-container: #252525;
+            --text-main: #e0e0e0;
+            --text-sub: #aaa;
+            --text-header: #A7D47C;
+            --border-color: #444;
+            --border-drag: #5a9ee2;
+            --toggle-bg-off: #555;
+            --toggle-bg-on: #A7D47C;
+            --sp-pill-bg: #004e8c;
+            --sp-pill-text: #72e5ff;
+            --sp-chip-bg: #3b3a39;
+            --sp-chip-text: #ffffff;
+            --sp-check-color: #55b555;
+        }
+
+        body {
+            font-family: "Segoe UI", sans-serif;
+            background-color: var(--bg-body);
+            margin: 0; padding: 20px;
+            color: var(--text-main);
+            transition: 0.3s;
+        }
+
+        /* HEADER */
+        .page-header {
+            max-width: 1400px; margin: 0 auto 20px auto; padding: 16px 24px;
+            background-color: var(--bg-header); border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            display: flex; align-items: center; gap: 16px;
+            border: 1px solid var(--border-color);
+        }
+        .page-header img { height: 40px; width: 40px; }
+        .page-header h1 { font-size: 1.5em; font-weight: 600; margin: 0; color: var(--text-header); margin-right: auto; }
+        
+        .header-controls { display: flex; gap: 16px; align-items: center; }
+        .icon-btn { background: none; border: none; cursor: pointer; color: var(--text-sub); display: flex; }
+        .icon-btn svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+        /* UPLOAD ZONE */
+        #drop-zone {
+            max-width: 900px; margin: 40px auto; padding: 60px;
+            border: 3px dashed var(--border-color); border-radius: 12px;
+            background-color: var(--bg-dropzone); text-align: center;
+            font-size: 1.2em; color: var(--text-sub); cursor: pointer;
+        }
+        #drop-zone:hover { border-color: var(--border-drag); background-color: var(--bg-dropzone-drag); }
+        #status { text-align: center; margin-top: 20px; }
+
+        /* TABLE */
+        .data-container {
+            max-width: 1600px; margin: 20px auto;
+            background-color: var(--bg-container); border: 1px solid var(--border-color);
+            border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); max-height: 80vh;
+        }
+        .table-wrapper { overflow: auto; flex-grow: 1; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+        
+        th {
+            background-color: var(--bg-header); color: var(--text-sub); font-weight: 600;
+            position: sticky; top: 0; padding: 12px 16px; border-bottom: 2px solid var(--border-color);
+            white-space: nowrap; z-index: 10; font-size: 13px;
+            cursor: pointer; user-select: none; transition: background 0.2s;
+        }
+        th:hover { background-color: rgba(0,0,0,0.05); color: var(--text-main); }
+        
+        td { padding: 10px 16px; border-bottom: 1px solid var(--border-color); white-space: nowrap; vertical-align: middle; }
+        tr:hover { background-color: rgba(0,0,0,0.03); }
+        .hidden { display: none !important; }
+
+        /* SORT ICONS */
+        .sort-icon { display: inline-block; margin-left: 5px; font-size: 10px; opacity: 0.5; }
+        th.active-sort .sort-icon { opacity: 1; color: var(--text-header); }
+
+        /* TOGGLE */
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--toggle-bg-off); transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--toggle-bg-on); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* SPO VISUALS */
+        .sp-pill { background: var(--sp-pill-bg); color: var(--sp-pill-text); padding: 4px 12px; border-radius: 12px; font-weight: 600; font-size: 13px; display: inline-block; }
+        .sp-user { background: var(--sp-chip-bg); color: var(--sp-chip-text); padding: 4px 10px; border-radius: 16px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+        .sp-check { color: var(--sp-check-color); font-size: 18px; }
+        .title-icon { display: inline-block; width: 16px; height: 16px; border: 1px solid #605e5c; border-radius: 50%; margin-right: 10px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+    <header class="page-header">
+        <img src="https://us-dc.keepit.com/public/theme-assets/background-images/theme-green/keepit_Logo_small.svg" alt="Logo">
+        <h1>SPO List Viewer</h1>
+        <div class="header-controls">
+            <label class="switch" title="Dark Mode"><input type="checkbox" id="themeToggle"><span class="slider"></span></label>
+            <button class="icon-btn" onclick="downloadCSV()" id="dlBtn" style="display:none;" title="Download CSV">
+                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            </button>
+            <button class="icon-btn" onclick="location.reload()" id="rstBtn" style="display:none;" title="Reset">
+                <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            </button>
+        </div>
+    </header>
+
+    <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none">
+    <div id="drop-zone" onclick="document.getElementById('folderInput').click()">
+        <p><strong>Click to Select Folder</strong></p>
+        <p style="font-size: 0.9em; opacity: 0.7;">Select parent folder containing "Items", "Columns" and "Views"</p>
+    </div>
+    <div id="status"></div>
+
+    <div id="render-area" class="data-container hidden">
+        <div class="table-wrapper">
+            <table id="spoTable"><thead id="tableHead"></thead><tbody id="tableBody"></tbody></table>
+        </div>
+        <div style="padding:10px; border-top:1px solid var(--border-color); color:var(--text-sub); font-size:12px;" id="rowCount"></div>
+    </div>
+
+<script>
+    let parsedItems = [];
+    let columnMap = {}; 
+    let viewOrder = []; 
+    let fallbackHeaders = new Set(); 
+    let userDatabase = {};
+    let sortState = { column: null, direction: 1 }; // 1 = asc, -1 = desc
+
+    const FALLBACK_BLOCKLIST = ['contenttype', 'attachments', 'folderchildcount', 'itemchildcount', 'complianceassetid', 'odata__'];
+
+    document.getElementById('themeToggle').addEventListener('change', (e) => {
+        document.body.classList.toggle('dark-mode', e.target.checked);
+    });
+
+    document.getElementById('folderInput').addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if(!files.length) return;
+
+        reset();
+        msg("Scanning folder structure...");
+
+        const itemFiles = files.filter(f => f.webkitRelativePath.includes('/Items/'));
+        const colFiles = files.filter(f => f.webkitRelativePath.includes('/Columns/'));
+        const viewFiles = files.filter(f => f.webkitRelativePath.includes('/Views/'));
+        
+        // Auto-detect User Info List
+        const userFiles = files.filter(f => f.webkitRelativePath.toLowerCase().includes('user information list') && f.webkitRelativePath.includes('/Items/'));
+
+        if(itemFiles.length === 0) { msg("Error: No 'Items' folder found."); return; }
+
+        // 1. Build User DB
+        if(userFiles.length > 0) {
+            msg(`Processing ${userFiles.length} user records...`);
+            for(const f of userFiles) {
+                try {
+                    const text = await readFile(f);
+                    let data = null;
+                    if(text.trim().startsWith('{')) data = JSON.parse(text);
+                    if(data && data.ID && data.Title) {
+                        userDatabase[data.ID] = data.Title; 
+                    }
+                } catch(e) {}
+            }
+        }
+
+        // 2. Build Schema
+        msg(`Reading ${colFiles.length} columns...`);
+        for(const f of colFiles) {
+            if(f.name.startsWith('.')) continue;
+            try {
+                const text = await readFile(f);
+                const info = parseColumnSchema(text, f.name);
+                const internalName = f.name.replace(/\.[^/.]+$/, ""); 
+                columnMap[internalName] = info; 
+            } catch(e) {}
+        }
+
+        // 3. Parse Views
+        if(viewFiles.length > 0) {
+            msg(`Reading ${viewFiles.length} views...`);
+            for(const f of viewFiles) {
+                if(f.name.startsWith('.')) continue;
+                try {
+                    const text = await readFile(f);
+                    const fields = parseViewFile(text);
+                    if(fields && fields.length > 0) {
+                        viewOrder = fields;
+                        break; 
+                    }
+                } catch(e) {}
+            }
+        }
+        
+        // 4. Parse Items
+        msg(`Parsing ${itemFiles.length} items...`);
+        for(const f of itemFiles) {
+            if(f.name.startsWith('.')) continue;
+            try {
+                const text = await readFile(f);
+                if(!text.trim()) continue;
+                
+                let data = null;
+                if(text.trim().startsWith('{')) data = JSON.parse(text);
+                else if(text.trim().startsWith('<')) data = parseXML(text);
+
+                if(data) {
+                    const flat = flatten(data);
+                    parsedItems.push(flat);
+                    Object.keys(flat).forEach(k => {
+                        if(!isJunk(k)) fallbackHeaders.add(k);
+                    });
+                }
+            } catch(e) {}
+        }
+
+        if(parsedItems.length > 0) {
+            render();
+            document.getElementById('drop-zone').style.display='none';
+            document.getElementById('render-area').classList.remove('hidden');
+            document.getElementById('dlBtn').style.display='flex';
+            document.getElementById('rstBtn').style.display='flex';
+            document.getElementById('rowCount').innerText = `${parsedItems.length} items found`;
+            msg("");
+        } else {
+            msg("No valid items found.");
+        }
+    });
+
+    // --- SORTING LOGIC ---
+    function sortData(columnKey) {
+        if (sortState.column === columnKey) {
+            sortState.direction *= -1; // Toggle
+        } else {
+            sortState.column = columnKey;
+            sortState.direction = 1; // Default Asc
+        }
+
+        parsedItems.sort((a, b) => {
+            let valA = a[columnKey];
+            let valB = b[columnKey];
+
+            // Handle Fallbacks (like IDs)
+            if (valA === undefined && a[columnKey + "Id"] !== undefined) valA = a[columnKey + "Id"];
+            if (valB === undefined && b[columnKey + "Id"] !== undefined) valB = b[columnKey + "Id"];
+
+            // Handle Nulls (Push to bottom)
+            if (valA === undefined || valA === null) return 1;
+            if (valB === undefined || valB === null) return -1;
+
+            // Numeric Sort
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                return (valA - valB) * sortState.direction;
+            }
+
+            // String Sort (Natural)
+            return valA.toString().localeCompare(valB.toString(), undefined, {numeric: true}) * sortState.direction;
+        });
+
+        render(); // Re-render table
+    }
+
+    // --- PARSERS ---
+
+    function parseViewFile(jsonText) {
+        try {
+            const data = JSON.parse(jsonText);
+            if (data && data.ViewFields && Array.isArray(data.ViewFields.Items)) {
+                return data.ViewFields.Items;
+            }
+            return null;
+        } catch (e) { return null; }
+    }
+
+    function parseColumnSchema(xmlText, filename) {
+        let displayName = filename.replace(/\.[^/.]+$/, ""); 
+        let type = 'Text';
+        const displayMatch = xmlText.match(/DisplayName="([^"]+)"/i);
+        if(displayMatch) displayName = displayMatch[1];
+        const typeMatch = xmlText.match(/Type="([^"]+)"/i);
+        if(typeMatch) type = typeMatch[1];
+        
+        const lower = filename.toLowerCase();
+        if(lower.includes('choice')) type = 'Choice';
+        else if(lower.includes('date')) type = 'DateTime';
+        else if(lower.includes('user') || lower.includes('person')) type = 'User';
+        else if(lower.includes('yesno') || lower.includes('boolean')) type = 'Boolean';
+
+        return { displayName, type };
+    }
+
+    function render() {
+        const thead = document.getElementById('tableHead');
+        const tbody = document.getElementById('tableBody');
+        
+        let headers = [];
+        if (viewOrder.length > 0) {
+            headers = viewOrder;
+        } else {
+            let allKeys = new Set();
+            parsedItems.forEach(i => Object.keys(i).forEach(k => allKeys.add(k)));
+            headers = Array.from(allKeys).sort(); 
+        }
+
+        const displayHeaders = headers.filter(h => h !== 'Edit' && h !== 'Attachments');
+
+        // Header Row
+        let hHtml = `<tr><th style="width:30px; cursor:default;"></th>`;
+        displayHeaders.forEach(h => {
+            const dataKey = (h === 'LinkTitle' || h === 'LinkTitleNoMenu') ? 'Title' : h;
+            const display = (columnMap[dataKey] && columnMap[dataKey].displayName) ? columnMap[dataKey].displayName : beautify(h);
+            
+            // Sort Icon Logic
+            let sortIcon = '';
+            let activeClass = '';
+            if (sortState.column === dataKey) {
+                sortIcon = sortState.direction === 1 ? ' ▲' : ' ▼';
+                activeClass = 'active-sort';
+            }
+
+            hHtml += `<th class="${activeClass}" onclick="sortData('${dataKey}')">${display}<span class="sort-icon">${sortIcon}</span></th>`;
+        });
+        hHtml += "</tr>";
+        thead.innerHTML = hHtml;
+
+        // Body Rows
+        const toShow = parsedItems.slice(0, 200); 
+        let bHtml = "";
+
+        toShow.forEach(item => {
+            bHtml += `<tr><td><span class="title-icon"></span></td>`;
+            displayHeaders.forEach(h => {
+                const dataKey = (h === 'LinkTitle' || h === 'LinkTitleNoMenu') ? 'Title' : h;
+                const colInfo = columnMap[dataKey] || { type: 'Text' };
+                
+                let val = item[dataKey];
+                if (val === undefined && item[dataKey + "Id"] !== undefined) val = item[dataKey + "Id"];
+
+                let cell = '-'; 
+
+                if(val !== undefined && val !== null && val !== '') {
+                    cell = val; 
+
+                    if(dataKey === 'Title') {
+                        cell = `<b>${val}</b>`;
+                    }
+                    else if(colInfo.type === 'Choice') {
+                        cell = `<span class="sp-pill">${val}</span>`;
+                    }
+                    else if(colInfo.type === 'User' || colInfo.type === 'Person') {
+                        let userName = userDatabase[String(val)] || `${val}`; // Just ID if no map
+                        cell = `<span class="sp-user">${userName}</span>`;
+                    }
+                    else if(colInfo.type === 'Boolean' || val === true || val === 'true') {
+                        cell = `<span class="sp-check">✔</span>`;
+                    }
+                    else if(colInfo.type === 'DateTime') {
+                        const d = new Date(val);
+                        if(!isNaN(d)) cell = d.toLocaleDateString('en-US');
+                    }
+                }
+                bHtml += `<td>${cell}</td>`;
+            });
+            bHtml += "</tr>";
+        });
+        tbody.innerHTML = bHtml;
+    }
+
+    function isJunk(h) {
+        const lower = h.toLowerCase();
+        if(FALLBACK_BLOCKLIST.some(b => lower.includes(b))) return true;
+        if(lower.endsWith('id') && lower !== 'id') return true;
+        return false;
+    }
+
+    function beautify(s) { return s.replace(/([A-Z])/g, ' $1').trim(); }
+    function readFile(f) { return new Promise(r => { const rd = new FileReader(); rd.onload=()=>r(rd.result); rd.readAsText(f); }); }
+    function parseXML(t){ const p=new DOMParser(),d=p.parseFromString(t,"text/xml"),o={},r=d.documentElement; if(r.attributes)for(let i=0;i<r.attributes.length;i++)o[r.attributes[i].name]=r.attributes[i].value; for(let c of r.children)o[c.tagName]=c.textContent; return o; }
+    function flatten(o,p='',r={}){ for(let k in o){ let v=o[k],nk=p?`${p}_${k}`:k; if(typeof v==='object'&&v)flatten(v,nk,r); else r[nk]=v; } return r; }
+    function msg(t) { document.getElementById('status').innerText = t; }
+    function reset() { parsedItems=[]; columnMap={}; viewOrder=[]; userDatabase={}; sortState={column:null, direction:1}; document.getElementById('tableHead').innerHTML=''; document.getElementById('tableBody').innerHTML=''; }
+
+    function downloadCSV() {
+        if(!parsedItems.length) return;
+        
+        const headers = viewOrder.length > 0 ? viewOrder : Object.keys(parsedItems[0]);
+        const validHeaders = headers.filter(h => h !== 'Edit' && h !== 'Attachments');
+
+        const csvHeaderRow = validHeaders.map(h => {
+             const dataKey = (h === 'LinkTitle' || h === 'LinkTitleNoMenu') ? 'Title' : h;
+             return columnMap[dataKey] ? columnMap[dataKey].displayName : h;
+        }).join(',');
+
+        const rows = [csvHeaderRow];
+        
+        parsedItems.forEach(item => {
+            rows.push(validHeaders.map(h => {
+                const dataKey = (h === 'LinkTitle' || h === 'LinkTitleNoMenu') ? 'Title' : h;
+                
+                let val = item[dataKey];
+                if (val === undefined && item[dataKey + "Id"] !== undefined) val = item[dataKey + "Id"];
+
+                const colInfo = columnMap[dataKey];
+                if (colInfo && (colInfo.type === 'User' || colInfo.type === 'Person')) {
+                    if (userDatabase[String(val)]) val = userDatabase[String(val)];
+                }
+
+                if (val === undefined || val === null || val === '') val = '-';
+                
+                return `"${val.toString().replace(/"/g,'""')}"`;
+            }).join(','));
+        });
+
+        const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'SPO_Export.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+</script>
+</body>
+</html>
